@@ -85,7 +85,7 @@ svg{width:100%;height:auto;display:block;touch-action:none;user-select:none}
     </div>
     <div id="trStage"><div id="trSvg"></div></div>
     <div class="fb" id="trMsg"></div>
-    <div class="leg"><i>Clique un point, puis le point suivant. Saisis le cap et les altitudes sur le tracé — validation dès que tu cliques ailleurs. Les cônes d'entrée s'affichent une fois le circuit validé.</i></div>
+    <div class="leg"><i>Clique un point, puis le point suivant. Sur les retours, les axes d'entrée se tracent du bout du cône (point ambre) vers N, ME1 ou SE.</i></div>
   </div>
   <button class="main" id="trCheck">VALIDER LE CIRCUIT</button>
 </div>
@@ -154,11 +154,9 @@ set("N",23,75,"CV1");     set("ME1",71,90,"LA1");
 set("W",310,55,"V216");
 set("S1",60,95,"IP34");   set("SE",70,85,"S1");
 
-/* points de virage : jamais nommés à l'écran (comme sur les planches) */
-const HIDDEN=new Set(["V116","V216","V134"]);
+const HIDDEN=new Set(["V116","V216","V134"]);   /* virages : jamais nommés */
 const FIXED=new Set(["FIELD","IP16","IP34","TO16","TO34"]);
 const LABEL={IP16:"IP",IP34:"IP",TO16:"Décollage 16",TO34:"Décollage 34"};
-const lab=n=>HIDDEN.has(n)?"le virage":(LABEL[n]||n);
 const MASTER=["LA1","CV1","N","ME1","W","S1","SE"];
 
 /* ================== CIRCUITS ================== */
@@ -188,7 +186,7 @@ const DATA=[
  alt:{V216:1700},axes:[]}
 ];
 
-/* ====== RELAXATION ====== */
+/* ====== RELAXATION (sur les vraies branches, pas les cônes) ====== */
 (function fit(){
   const legs=DATA.flatMap(c=>c.legs);
   const L0=legs.map(l=>Math.hypot(P[l.t].x-P[l.f].x,P[l.t].y-P[l.f].y));
@@ -202,10 +200,38 @@ const DATA=[
   }
 })();
 
+/* ====== POINTS DE CÔNE (axes d'entrée), dérivés après relaxation ======
+   Chaque cône garde son "tip" (bout du cône, point ambre, position de départ
+   du geste de tracé) et son "point" (N/ME1/SE, l'arrivée du geste). */
+const CONE_IDS=new Set();
+DATA.forEach(c=>{
+  c.cones=[];
+  c.axes.forEach(a=>{
+    a.a.forEach(v=>{
+      const id=a.p+"_"+v;
+      if(!P[id]){
+        const p=P[a.p],u=dir(v+180);
+        P[id]={x:p.x+u.x*52,y:p.y+u.y*52};
+      }
+      CONE_IDS.add(id);
+      c.cones.push({tip:id,point:a.p,v});
+    });
+  });
+});
+/* liste combinée de tous les cônes des retours, affichée sur R16 ET R34 */
+const R16=DATA.find(d=>d.id==="R16"), R34=DATA.find(d=>d.id==="R34");
+const ALLCONES=[...R16.cones,...R34.cones];
+R16.displayCones=ALLCONES;
+R34.displayCones=ALLCONES;
+
+const lab=n=>{
+  if(HIDDEN.has(n))return "le virage";
+  if(CONE_IDS.has(n)){const v=n.split("_")[1];return "l'axe "+String(v).padStart(3,"0")+"°";}
+  return LABEL[n]||n;
+};
+
 /* ====== CADRAGE COMMUN ====== */
-const AXPT=[];
-DATA.forEach(c=>c.axes.forEach(a=>a.a.forEach(v=>{
-  const p=P[a.p],u=dir(v+180);AXPT.push({x:p.x+u.x*52,y:p.y+u.y*52});})));
+const AXPT=[...CONE_IDS].map(id=>P[id]);
 const RA=dir(RWY);
 const R1={x:-RA.x*24,y:-RA.y*24},R2={x:RA.x*24,y:RA.y*24};
 const VIEW=(()=>{
@@ -216,11 +242,13 @@ const VIEW=(()=>{
   return{k,W:(mxx-mnx)*k+2*PAD,H:(mxy-mny)*k+2*PAD,
     X:p=>(p.x-mnx)*k+PAD,Y:p=>(p.y-mny)*k+PAD};})();
 const X=p=>VIEW.X(p),Y=p=>VIEW.Y(p);
-const ptsOf=c=>[...MASTER,...c.extra,c.start];
-const used=c=>new Set(c.legs.flatMap(l=>[l.f,l.t]));
+/* points affichés : ceux du circuit + displayCones s'il y en a (union R16/R34) */
+const ptsOf=c=>[...MASTER,...c.extra,c.start,
+  ...(c.displayCones||c.cones).map(cn=>cn.tip)];
+/* points/branches réellement requis pour ce circuit précis */
+const used=c=>new Set([...c.legs.flatMap(l=>[l.f,l.t]),...c.cones.flatMap(cn=>[cn.tip,cn.point])]);
 const isMajor=n=>MASTER.includes(n)||["IP16","IP34","TO16","TO34"].includes(n);
-const axPts=c=>c.axes.flatMap(a=>{const p=P[a.p];
-  return a.a.map(v=>{const u=dir(v+180);return{p,e:{x:p.x+u.x*52,y:p.y+u.y*52},v};});});
+const axPts=c=>(c.displayCones||c.cones).map(cn=>({p:P[cn.point],e:P[cn.tip],v:cn.v}));
 
 /* ====== PLACEMENT DES ÉTIQUETTES ====== */
 const LBL={};
@@ -234,14 +262,16 @@ function overlap(a,b){
     ptsOf(c).forEach(n=>{
       const p=P[n];
       placed.push({x:X(p),y:Y(p),w:26,h:26});
-      if(!HIDDEN.has(n)){
+      if(!HIDDEN.has(n)&&!CONE_IDS.has(n)){
         const L=lab(n).length;
         placed.push({x:X(p)+10+L*3.6,y:Y(p)-5,w:L*7.2,h:16});
       }
     });
     Object.keys(c.alt).forEach(n=>{if(!U.has(n))return;const p=P[n];
       placed.push({x:X(p)+10+BOXA.w/2,y:Y(p)+11,w:BOXA.w,h:BOXA.h});});
-    c.legs.forEach(l=>{
+    /* branches réelles + branches cône (tip -> point) pour le placement des caps */
+    const forCaption=[...c.legs,...c.cones.map(cn=>({f:cn.tip,t:cn.point,c:cn.v}))];
+    forCaption.forEach(l=>{
       const A=P[l.f],B=P[l.t],u=dir(l.c),cands=[];
       [.5,.42,.58,.34,.66,.28].forEach(t=>{[1,-1].forEach(side=>{[11,17].forEach(off=>{
         cands.push({x:A.x+(B.x-A.x)*t-u.y*off*side,
@@ -266,6 +296,12 @@ function legDesc(l){
   return "Quel cap pour rejoindre le virage depuis "+lab(l.f)+" ?";
 }
 
+/* ====== branches traçables = vraies branches + axes d'entrée (tip -> point) ====== */
+function branchesOf(c){
+  return [...c.legs.map(l=>({f:l.f,t:l.t,c:l.c,kind:"leg"})),
+          ...c.cones.map(cn=>({f:cn.tip,t:cn.point,c:cn.v,kind:"cone"}))];
+}
+
 const TYPES=[{id:"alt",nom:"Altitudes"},{id:"cap",nom:"Caps"},
  {id:"dest",nom:"Destination"},{id:"axe",nom:"Cônes d'entrée"}];
 const CLIST=DATA.map(d=>({id:d.id,nom:d.nom}));
@@ -280,7 +316,7 @@ function multi(box,items,sel,cls){
 
 /* ================== MODE TRACÉ ================== */
 let trId="D16",trC=null,trSvg=null,trStart=null,trRub=null,trG=null;
-let trDone=[],trPend=null,trErr=0,trFlds=[],trClosed=false,trAltDone=null;
+let trDone=[],trPend=null,trErr=0,trFlds=[],trClosed=false,trAltDone=null,trBranches=[];
 function trSel(){chips($("#trSel"),CLIST,[trId],v=>{trId=v;trSel();trInit();},"cy");}
 
 function px(p){const r=$("#trSvg").getBoundingClientRect(),s=r.width/VIEW.W;
@@ -288,9 +324,14 @@ function px(p){const r=$("#trSvg").getBoundingClientRect(),s=r.width/VIEW.W;
 function clearFlds(){trFlds.forEach(f=>{f.dataset.dead="1";f.remove();});trFlds=[];}
 const pendingAlts=leg=>[leg.f,leg.t].filter((n,i,a)=>a.indexOf(n)===i)
   .filter(n=>trC.alt[n]!==undefined&&!trAltDone.has(n));
+function ptColor(n){
+  if(CONE_IDS.has(n))return "#fbbf24";
+  return isMajor(n)?"#4ade80":"#8b949e";
+}
 
 function trInit(){
   trC=DATA.find(d=>d.id===trId);
+  trBranches=branchesOf(trC);
   trStart=null;trDone=[];trPend=null;trErr=0;trClosed=false;
   trAltDone=new Set();clearFlds();
   $("#trMsg").textContent="";$("#trMsg").className="fb";
@@ -310,9 +351,9 @@ function trInit(){
   trRub=el("line",{stroke:"#22d3ee","stroke-width":2,"stroke-dasharray":"6 5",opacity:0});
   svg.appendChild(trRub);
   ptsOf(trC).forEach(n=>{
-    const p=P[n],maj=isMajor(n),hidden=HIDDEN.has(n),x=X(p),y=Y(p);
+    const p=P[n],maj=isMajor(n),isCone=CONE_IDS.has(n),hidden=HIDDEN.has(n)||isCone,x=X(p),y=Y(p);
     svg.appendChild(el("circle",{cx:x,cy:y,r:maj?5:3.5,fill:"#0d1117",
-      stroke:maj?"#4ade80":"#8b949e","stroke-width":2,"data-pt":n}));
+      stroke:ptColor(n),"stroke-width":2,"data-pt":n}));
     if(!hidden){
       const t=el("text",{x:x+10,y:y-5,fill:maj?"#e6edf3":"#8b949e","font-size":maj?13:11});
       t.textContent=lab(n);svg.appendChild(t);
@@ -328,7 +369,7 @@ function trInit(){
   svg.addEventListener("pointermove",trMove);
 }
 function trMark(n,on){const c=trSvg.querySelector('[data-pt="'+CSS.escape(n)+'"]');
-  if(c)c.setAttribute("stroke",on?"#fbbf24":(isMajor(n)?"#4ade80":"#8b949e"));}
+  if(c)c.setAttribute("stroke",on?"#22d3ee":ptColor(n));}
 function msg(t,cls){$("#trMsg").className="fb "+(cls||"");$("#trMsg").textContent=t;}
 
 function trDown(e){
@@ -347,8 +388,8 @@ function trMove(e){
   trRub.setAttribute("opacity",.7);
 }
 function trTry(a,b){
-  const leg=trC.legs.find(l=>l.f===a&&l.t===b);
-  const rev=trC.legs.find(l=>l.f===b&&l.t===a),U=used(trC);
+  const leg=trBranches.find(l=>l.f===a&&l.t===b);
+  const rev=trBranches.find(l=>l.f===b&&l.t===a),U=used(trC);
   const clear=()=>{trMark(a,false);trStart=null;trRub.setAttribute("opacity",0);};
   if(trDone.find(d=>d.f===a&&d.t===b)){clear();msg("Branche déjà tracée.","warn");return;}
   if(!leg){
@@ -450,7 +491,7 @@ function trDrawLeg(leg,capOk,altRes){
 $("#trCheck").onclick=()=>{
   if(trClosed){trInit();return;}
   if(trPend){msg("Termine d'abord la branche en cours.","warn");return;}
-  const miss=trC.legs.filter(l=>!trDone.find(d=>d.f===l.f&&d.t===l.t));
+  const miss=trBranches.filter(l=>!trDone.find(d=>d.f===l.f&&d.t===l.t));
   if(miss.length){
     miss.forEach(l=>{
       const A=P[l.f],B=P[l.t];
@@ -471,21 +512,12 @@ $("#trCheck").onclick=()=>{
         miss.map(l=>"   "+lab(l.f)+" → "+lab(l.t)).join("\n")+
         "\nErreurs en cours de tracé : "+trErr,"bad");
   }else{
-    showAxes();
-    const axNote=trC.axes.length?" Cônes d'entrée affichés.":"";
-    msg((trErr?("Circuit complet, mais "+trErr+" erreur(s) en cours de tracé."):
-              "✓ Circuit complet et sans erreur.")+axNote,trErr?"warn":"good");
+    msg(trErr?("Circuit complet, mais "+trErr+" erreur(s) en cours de tracé."):
+              "✓ Circuit complet et sans erreur.",trErr?"warn":"good");
   }
   trClosed=true;
   $("#trCheck").textContent="RECOMMENCER";$("#trCheck").classList.add("done");
 };
-function showAxes(){
-  axPts(trC).forEach(a=>{
-    trG.appendChild(el("line",{x1:X(a.p),y1:Y(a.p),x2:X(a.e),y2:Y(a.e),
-      stroke:"#fbbf24","stroke-width":1.4,"stroke-dasharray":"5 4",opacity:.85}));
-    const t=el("text",{x:X(a.e),y:Y(a.e)-4,fill:"#fbbf24","font-size":11,"text-anchor":"middle"});
-    t.textContent=cap(a.v);trG.appendChild(t);});
-}
 $("#trReset").onclick=trInit;
 addEventListener("resize",()=>{if(trPend)openFields(trPend);});
 trSel();trInit();
@@ -574,9 +606,9 @@ function drawMap(){
       s+='<text x="'+x(m)+'" y="'+y(m)+'" fill="#fbbf24" font-size="13" text-anchor="middle" '+
          'dominant-baseline="middle">'+cap(l.c)+'</text>';}});
   ptsOf(c).forEach(n=>{
-    const p=P[n],a=c.alt[n],maj=isMajor(n),on=U.has(n),hidden=HIDDEN.has(n);
-    s+='<circle cx="'+x(p)+'" cy="'+y(p)+'" r="'+(maj?5:3.2)+'" fill="#0d1117" stroke="'+
-       (on?(maj?"#4ade80":"#8b949e"):"#4b5563")+'" stroke-width="2"/>';
+    const p=P[n],a=c.alt[n],maj=isMajor(n),on=U.has(n),isCone=CONE_IDS.has(n),hidden=HIDDEN.has(n)||isCone;
+    const col=isCone?"#fbbf24":(on?(maj?"#4ade80":"#8b949e"):"#4b5563");
+    s+='<circle cx="'+x(p)+'" cy="'+y(p)+'" r="'+(maj?5:3.2)+'" fill="#0d1117" stroke="'+col+'" stroke-width="2"/>';
     if(!hidden)
       s+='<text x="'+(X(p)+10).toFixed(1)+'" y="'+(Y(p)-5).toFixed(1)+'" fill="'+
          (on?(maj?"#e6edf3":"#8b949e"):"#4b5563")+'" font-size="'+(maj?13:11)+'">'+esc(lab(n))+'</text>';
