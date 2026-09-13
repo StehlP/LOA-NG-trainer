@@ -67,7 +67,7 @@ svg{width:100%;height:auto;display:block;touch-action:none;user-select:none}
 </head>
 <body>
 <div class="wrap">
-<h1>CIRCUITS SALON</h1>
+<h1>CIRCUITS SALON ET TBA</h1>
 <div class="sub">Départs / Retours — caps, trajectoires, altitudes</div>
 
 <div class="tabs">
@@ -123,9 +123,6 @@ svg{width:100%;height:auto;display:block;touch-action:none;user-select:none}
   </div>
 </div>
 
-<div class="warn">Données saisies depuis les planches manuscrites — carte de fond ajustée par relaxation sur les caps, à recouper avant vol.</div>
-</div>
-
 <script>
 /* ================== UTILS ================== */
 const $=s=>document.querySelector(s);
@@ -156,7 +153,7 @@ set("S1",60,95,"IP34");   set("SE",70,85,"S1");
 
 const FIXED=new Set(["FIELD","IP16","IP34","TO16","TO34"]);
 const LABEL={IP16:"IP",IP34:"IP",TO16:"Décollage 16",TO34:"Décollage 34",
- V116:"1er virage",V216:"pt tournant",V134:"1er virage"};
+ V116:"pont",V216:"champs",V134:"pont"};
 const lab=n=>LABEL[n]||n;
 const MASTER=["LA1","CV1","N","ME1","W","S1","SE"];
 
