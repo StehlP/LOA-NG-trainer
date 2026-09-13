@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Circuits SALON — Entraînement</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--txt:#c9d1d9;--dim:#8b949e;
+ --cy:#22d3ee;--gr:#4ade80;--rd:#f87171;--am:#fbbf24;--off:#4b5563;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);
+ font-family:"SFMono-Regular",Consolas,"Roboto Mono",monospace;font-size:15px;line-height:1.5}
+.wrap{max-width:820px;margin:0 auto;padding:16px}
+h1{font-size:18px;letter-spacing:2px;color:var(--cy);margin:0 0 2px}
+.sub{color:var(--dim);font-size:12px;margin-bottom:16px}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tab{flex:1;padding:8px;text-align:center;background:var(--panel);border:1px solid var(--line);
+ cursor:pointer;color:var(--dim);font-size:12px;letter-spacing:1px}
+.tab.on{color:var(--cy);border-color:var(--cy)}
+.panel{background:var(--panel);border:1px solid var(--line);padding:16px;margin-bottom:16px}
+.lbl{color:var(--am);font-size:12px;letter-spacing:1px;margin-bottom:8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:6px 10px;border:1px solid var(--line);cursor:pointer;color:var(--dim);font-size:13px;user-select:none}
+.chip.on{color:var(--gr);border-color:var(--gr)}
+.chip.cy.on{color:var(--cy);border-color:var(--cy)}
+.ctrlrow{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start}
+.ctrlrow>div{min-width:0}
+button.main{width:100%;padding:12px;background:transparent;border:1px solid var(--cy);color:var(--cy);
+ font-family:inherit;font-size:14px;letter-spacing:2px;cursor:pointer}
+button.main:hover{background:rgba(34,211,238,.08)}
+button.main.done{border-color:var(--gr);color:var(--gr)}
+button.main.done:hover{background:rgba(74,222,128,.08)}
+button.sm{padding:8px 12px;background:transparent;border:1px solid var(--line);color:var(--dim);
+ font-family:inherit;font-size:12px;cursor:pointer;letter-spacing:1px}
+button.sm:hover{border-color:var(--dim);color:var(--txt)}
+.bar{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--dim);margin-bottom:12px}
+.bar b{color:var(--txt)}
+.ctx{color:var(--am);font-size:12px;letter-spacing:1px}
+.q{font-size:17px;margin:10px 0 16px;color:#fff}
+.opts{display:grid;gap:8px}
+.opt{padding:12px;border:1px solid var(--line);cursor:pointer;background:transparent;color:var(--txt);
+ font-family:inherit;font-size:16px;text-align:left}
+.opt:hover{border-color:var(--cy)}
+.opt.good{border-color:var(--gr);color:var(--gr)}
+.opt.bad{border-color:var(--rd);color:var(--rd)}
+.opt:disabled{cursor:default}
+.fb{margin-top:12px;font-size:14px;min-height:22px;white-space:pre-line}
+.fb.good{color:var(--gr)} .fb.bad{color:var(--rd)} .fb.warn{color:var(--am)}
+h3{color:var(--cy);font-size:14px;letter-spacing:1px;margin:0 0 8px}
+.hide{display:none}
+svg{width:100%;height:auto;display:block;touch-action:none;user-select:none}
+.hit{cursor:pointer}
+.leg{color:var(--dim);font-size:11px;display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
+.leg i{font-style:normal}
+.warn{color:var(--dim);font-size:11px;margin-top:20px;text-align:center}
+#trStage{position:relative}
+.fld{position:absolute;transform:translate(-50%,-50%);z-index:5;
+ background:#0d1117;border:1px solid var(--cy);color:var(--cy);
+ font-family:inherit;text-align:center;padding:3px 2px;outline:none;
+ box-shadow:0 0 0 3px rgba(13,17,23,.9)}
+.fld:focus{border-color:var(--am);color:var(--am)}
+.fld.cap{width:56px;font-size:14px}
+.fld.alt{width:66px;font-size:13px;border-color:var(--gr);color:var(--gr)}
+.fld.alt:focus{border-color:var(--am);color:var(--am)}
+.fld::placeholder{color:#3d4757}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>CIRCUITS SALON</h1>
+<div class="sub">Départs / Retours — caps, trajectoires, altitudes</div>
+
+<div class="tabs">
+  <div class="tab on" data-t="trace">TRACÉ</div>
+  <div class="tab" data-t="quiz">QUIZ</div>
+  <div class="tab" data-t="map">CARTE</div>
+</div>
+
+<div id="trace">
+  <div class="panel"><div class="lbl">CIRCUIT À TRACER</div><div class="chips" id="trSel"></div></div>
+  <div class="panel">
+    <div class="bar">
+      <span>Erreurs <b id="tre" style="color:var(--rd)">0</b></span>
+      <button class="sm" id="trReset">EFFACER</button>
+    </div>
+    <div id="trStage"><div id="trSvg"></div></div>
+    <div class="fb" id="trMsg"></div>
+    <div class="leg"><i>Clique un point, puis le point suivant. Saisis le cap et les altitudes sur le tracé — validation dès que tu cliques ailleurs.</i></div>
+  </div>
+  <button class="main" id="trCheck">VALIDER LE CIRCUIT</button>
+</div>
+
+<div id="quiz" class="hide">
+  <div id="setup">
+    <div class="panel"><div class="lbl">CIRCUITS</div><div class="chips" id="cSel"></div></div>
+    <div class="panel"><div class="lbl">TYPES DE QUESTION</div><div class="chips" id="tSel"></div></div>
+    <button class="main" id="go">DÉMARRER</button>
+  </div>
+  <div id="game" class="hide">
+    <div class="bar"><span>Q <b id="qn">1</b>/<b id="qt">20</b></span>
+      <span>Score <b id="sc">0</b></span><span>Série <b id="st">0</b></span></div>
+    <div class="panel">
+      <div class="ctx" id="ctx"></div><div class="q" id="qq"></div>
+      <div class="opts" id="op"></div><div class="fb" id="fb"></div>
+    </div>
+    <button class="main hide" id="next">SUIVANT →</button>
+    <button class="main hide" id="again">RECOMMENCER</button>
+  </div>
+</div>
+
+<div id="map" class="hide">
+  <div class="panel">
+    <div class="ctrlrow">
+      <div><div class="lbl">CIRCUIT</div><div class="chips" id="mSel"></div></div>
+      <div><div class="lbl">AFFICHAGE</div><div class="chips" id="vSel"></div></div>
+    </div>
+  </div>
+  <div class="panel"><h3 id="mTitle"></h3><div id="svgBox"></div>
+    <div class="leg"><i style="color:var(--cy)">— trajectoire</i>
+      <i style="color:var(--gr)">● point utilisé</i>
+      <i style="color:var(--off)">● hors circuit</i>
+      <i style="color:var(--am)">-- axes d'entrée</i></div>
+  </div>
+</div>
+
+<div class="warn">Données saisies depuis les planches manuscrites — carte de fond ajustée par relaxation sur les caps, à recouper avant vol.</div>
+</div>
+
+<script>
+/* ================== UTILS ================== */
+const $=s=>document.querySelector(s);
+const rnd=a=>a[Math.floor(Math.random()*a.length)];
+const shuf=a=>a.map(v=>[Math.random(),v]).sort((x,y)=>x[0]-y[0]).map(v=>v[1]);
+const norm=n=>((n%360)+360)%360;
+const cap=n=>String(norm(n)).padStart(3,"0")+"°";
+const ft=n=>n+" ft";
+const dir=c=>{const r=c*Math.PI/180;return{x:Math.sin(r),y:-Math.cos(r)};};
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const ALTS=[1200,1500,1700,2000,2200,2500,3000];
+const NS="http://www.w3.org/2000/svg";
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+
+/* ================== TERRAIN ================== */
+const RWY=160;
+const P={};
+function set(n,b,d,from){const o=from?P[from]:{x:0,y:0},u=dir(b);
+  P[n]={x:o.x+u.x*d,y:o.y+u.y*d};}
+P["FIELD"]={x:0,y:0};
+set("IP16",340,34); set("IP34",160,30);
+set("TO16",160,40); set("TO34",340,40);
+set("V116",260,45,"TO16"); set("V216",295,45,"V116"); set("V134",275,45,"TO34");
+set("LA1",20,105,"IP16"); set("CV1",347,75,"LA1");
+set("N",23,75,"CV1");     set("ME1",71,90,"LA1");
+set("W",310,55,"V216");
+set("S1",60,95,"IP34");   set("SE",70,85,"S1");
+
+const FIXED=new Set(["FIELD","IP16","IP34","TO16","TO34"]);
+const LABEL={IP16:"IP",IP34:"IP",TO16:"Décollage 16",TO34:"Décollage 34",
+ V116:"1er virage",V216:"pt tournant",V134:"1er virage"};
+const lab=n=>LABEL[n]||n;
+const MASTER=["LA1","CV1","N","ME1","W","S1","SE"];
+
+/* ================== CIRCUITS ================== */
+const DATA=[
+{id:"D16",nom:"DÉPART 16",start:"TO16",extra:["V116","V216"],
+ legs:[{f:"TO16",t:"V116",c:260},{f:"V116",t:"V216",c:295},
+       {f:"V216",t:"W",c:310},{f:"V216",t:"LA1",c:20},
+       {f:"LA1",t:"CV1",c:347},{f:"TO16",t:"S1",c:70},{f:"S1",t:"SE",c:70}],
+ alt:{W:1200,LA1:1200,CV1:1200,S1:2000,SE:2000},axes:[]},
+{id:"D34",nom:"DÉPART 34",start:"TO34",extra:["V134"],
+ legs:[{f:"TO34",t:"V134",c:275},{f:"V134",t:"W",c:265},{f:"V134",t:"LA1",c:20},
+       {f:"LA1",t:"CV1",c:347},{f:"LA1",t:"ME1",c:71}],
+ alt:{W:1200,LA1:1200,CV1:1200,ME1:1200},axes:[]},
+{id:"R16",nom:"RETOUR 16",start:"IP16",extra:[],
+ legs:[{f:"N",t:"CV1",c:203},{f:"CV1",t:"LA1",c:167},{f:"ME1",t:"LA1",c:251},
+       {f:"LA1",t:"IP16",c:200},{f:"W",t:"IP16",c:65}],
+ alt:{N:3000,CV1:2200,LA1:2200,ME1:2200,W:1700},
+ axes:[{p:"N",a:[158,210]},{p:"ME1",a:[207,288]}]},
+{id:"R34",nom:"RETOUR 34",start:"IP34",extra:[],
+ legs:[{f:"SE",t:"S1",c:250},{f:"S1",t:"IP34",c:240},{f:"W",t:"IP34",c:130}],
+ alt:{SE:2200,S1:2200,W:1700},axes:[{p:"SE",a:[181,280]}]}
+];
+
+/* ====== RELAXATION ====== */
+(function fit(){
+  const legs=DATA.flatMap(c=>c.legs);
+  const L0=legs.map(l=>Math.hypot(P[l.t].x-P[l.f].x,P[l.t].y-P[l.f].y));
+  for(let it=0;it<600;it++){
+    const acc={},add=(k,p)=>{(acc[k]=acc[k]||{x:0,y:0,n:0});acc[k].x+=p.x;acc[k].y+=p.y;acc[k].n++;};
+    legs.forEach((l,i)=>{const A=P[l.f],B=P[l.t],u=dir(l.c),d=L0[i];
+      if(!FIXED.has(l.t))add(l.t,{x:A.x+u.x*d,y:A.y+u.y*d});
+      if(!FIXED.has(l.f))add(l.f,{x:B.x-u.x*d,y:B.y-u.y*d});});
+    for(const k in acc){const a=acc[k];
+      P[k].x+=(a.x/a.n-P[k].x)*.45;P[k].y+=(a.y/a.n-P[k].y)*.45;}
+  }
+})();
+
+/* ====== CADRAGE COMMUN ====== */
+const AXPT=[];
+DATA.forEach(c=>c.axes.forEach(a=>a.a.forEach(v=>{
+  const p=P[a.p],u=dir(v+180);AXPT.push({x:p.x+u.x*52,y:p.y+u.y*52});})));
+const RA=dir(RWY);
+const R1={x:-RA.x*24,y:-RA.y*24},R2={x:RA.x*24,y:RA.y*24};
+const VIEW=(()=>{
+  const all=[...Object.values(P),...AXPT,R1,R2],PAD=70;
+  const xs=all.map(p=>p.x),ys=all.map(p=>p.y);
+  const mnx=Math.min(...xs),mxx=Math.max(...xs),mny=Math.min(...ys),mxy=Math.max(...ys);
+  const k=(780-2*PAD)/(mxx-mnx);
+  return{k,W:(mxx-mnx)*k+2*PAD,H:(mxy-mny)*k+2*PAD,
+    X:p=>(p.x-mnx)*k+PAD,Y:p=>(p.y-mny)*k+PAD};})();
+const X=p=>VIEW.X(p),Y=p=>VIEW.Y(p);
+const ptsOf=c=>[...MASTER,...c.extra,c.start];
+const used=c=>new Set(c.legs.flatMap(l=>[l.f,l.t]));
+const isMajor=n=>MASTER.includes(n)||["IP16","IP34","TO16","TO34"].includes(n);
+const axPts=c=>c.axes.flatMap(a=>{const p=P[a.p];
+  return a.a.map(v=>{const u=dir(v+180);return{p,e:{x:p.x+u.x*52,y:p.y+u.y*52},v};});});
+
+/* ====== PLACEMENT DES ÉTIQUETTES ====== */
+const LBL={};
+const legKey=l=>l.f+">"+l.t;
+const BOXC={w:52,h:20},BOXA={w:60,h:18};
+function overlap(a,b){
+  return Math.abs(a.x-b.x)*2<(a.w+b.w)&&Math.abs(a.y-b.y)*2<(a.h+b.h);}
+(function layout(){
+  DATA.forEach(c=>{
+    const placed=[],res={},U=used(c);
+    ptsOf(c).forEach(n=>{const p=P[n];
+      placed.push({x:X(p),y:Y(p),w:26,h:26});
+      placed.push({x:X(p)+10+lab(n).length*3.6,y:Y(p)-5,w:lab(n).length*7.2,h:16});});
+    Object.keys(c.alt).forEach(n=>{if(!U.has(n))return;const p=P[n];
+      placed.push({x:X(p)+10+BOXA.w/2,y:Y(p)+11,w:BOXA.w,h:BOXA.h});});
+    c.legs.forEach(l=>{
+      const A=P[l.f],B=P[l.t],u=dir(l.c),cands=[];
+      [.5,.42,.58,.34,.66,.28].forEach(t=>{[1,-1].forEach(side=>{[11,17].forEach(off=>{
+        cands.push({x:A.x+(B.x-A.x)*t-u.y*off*side,
+                    y:A.y+(B.y-A.y)*t+u.x*off*side});});});});
+      let best=cands[0];
+      for(const m of cands){const box={x:X(m),y:Y(m),w:BOXC.w,h:BOXC.h};
+        if(!placed.some(q=>overlap(box,q))){best=m;break;}}
+      res[legKey(l)]=best;
+      placed.push({x:X(best),y:Y(best),w:BOXC.w,h:BOXC.h});});
+    LBL[c.id]=res;});
+})();
+const capPos=(c,l)=>LBL[c.id][legKey(l)];
+
+const TYPES=[{id:"alt",nom:"Altitudes"},{id:"cap",nom:"Caps"},
+ {id:"dest",nom:"Destination"},{id:"axe",nom:"Axes d'entrée"}];
+const CLIST=DATA.map(d=>({id:d.id,nom:d.nom}));
+function chips(box,items,sel,cb,cls){
+  box.innerHTML="";
+  items.forEach(it=>{const d=document.createElement("div");
+    d.className="chip "+(cls||"")+(sel.includes(it.id)?" on":"");
+    d.textContent=it.nom;d.onclick=()=>cb(it.id);box.appendChild(d);});}
+function multi(box,items,sel,cls){
+  chips(box,items,sel,v=>{const i=sel.indexOf(v);
+    if(i<0)sel.push(v);else if(sel.length>1)sel.splice(i,1);multi(box,items,sel,cls);},cls);}
+
+/* ================== MODE TRACÉ ================== */
+let trId="D16",trC=null,trSvg=null,trStart=null,trRub=null,trG=null;
+let trDone=[],trPend=null,trErr=0,trFlds=[],trClosed=false,trAltDone=null;
+function trSel(){chips($("#trSel"),CLIST,[trId],v=>{trId=v;trSel();trInit();},"cy");}
+
+function px(p){const r=$("#trSvg").getBoundingClientRect(),s=r.width/VIEW.W;
+  return{x:X(p)*s,y:Y(p)*s};}
+/* marque les champs comme "morts" avant de les retirer, pour que leurs
+   handlers blur en attente (setTimeout) ne fassent rien */
+function clearFlds(){trFlds.forEach(f=>{f.dataset.dead="1";f.remove();});trFlds=[];}
+/* altitudes restant à saisir sur cette branche */
+const pendingAlts=leg=>[leg.f,leg.t].filter((n,i,a)=>a.indexOf(n)===i)
+  .filter(n=>trC.alt[n]!==undefined&&!trAltDone.has(n));
+
+function trInit(){
+  trC=DATA.find(d=>d.id===trId);
+  trStart=null;trDone=[];trPend=null;trErr=0;trClosed=false;
+  trAltDone=new Set();clearFlds();
+  $("#trMsg").textContent="";$("#trMsg").className="fb";
+  $("#tre").textContent=0;
+  $("#trCheck").textContent="VALIDER LE CIRCUIT";$("#trCheck").classList.remove("done");
+
+  const svg=el("svg",{viewBox:"0 0 "+VIEW.W.toFixed(0)+" "+VIEW.H.toFixed(0),"font-family":"monospace"});
+  const defs=el("defs");
+  ["ar:#22d3ee","are:#f87171"].forEach(s=>{const[id,col]=s.split(":");
+    const m=el("marker",{id,viewBox:"0 0 10 10",refX:9,refY:5,markerWidth:5,markerHeight:5,orient:"auto"});
+    m.appendChild(el("path",{d:"M0,1 L9,5 L0,9",fill:"none",stroke:col,"stroke-width":1.6}));
+    defs.appendChild(m);});
+  svg.appendChild(defs);
+  svg.appendChild(el("line",{x1:X(R1),y1:Y(R1),x2:X(R2),y2:Y(R2),
+    stroke:"#2f81f7","stroke-width":7,"stroke-linecap":"round"}));
+  trG=el("g");svg.appendChild(trG);
+  trRub=el("line",{stroke:"#22d3ee","stroke-width":2,"stroke-dasharray":"6 5",opacity:0});
+  svg.appendChild(trRub);
+  ptsOf(trC).forEach(n=>{
+    const p=P[n],maj=isMajor(n),x=X(p),y=Y(p);
+    svg.appendChild(el("circle",{cx:x,cy:y,r:maj?5:3.5,fill:"#0d1117",
+      stroke:maj?"#4ade80":"#8b949e","stroke-width":2,"data-pt":n}));
+    const t=el("text",{x:x+10,y:y-5,fill:maj?"#e6edf3":"#8b949e","font-size":maj?13:11});
+    t.textContent=lab(n);svg.appendChild(t);
+    svg.appendChild(el("circle",{cx:x,cy:y,r:17,fill:"transparent","class":"hit","data-hit":n}));});
+  const rose=el("g",{transform:"translate("+(VIEW.W-30)+",32)"});
+  rose.appendChild(el("line",{x1:0,y1:14,x2:0,y2:-12,stroke:"#8b949e","stroke-width":1.4}));
+  rose.appendChild(el("polygon",{points:"0,-17 -4,-8 4,-8",fill:"#8b949e"}));
+  const rt=el("text",{x:0,y:26,fill:"#8b949e","font-size":10,"text-anchor":"middle"});
+  rt.textContent="N";rose.appendChild(rt);svg.appendChild(rose);
+  $("#trSvg").innerHTML="";$("#trSvg").appendChild(svg);trSvg=svg;
+  svg.addEventListener("pointerdown",trDown);
+  svg.addEventListener("pointermove",trMove);
+}
+function trMark(n,on){const c=trSvg.querySelector('[data-pt="'+CSS.escape(n)+'"]');
+  if(c)c.setAttribute("stroke",on?"#fbbf24":(isMajor(n)?"#4ade80":"#8b949e"));}
+function msg(t,cls){$("#trMsg").className="fb "+(cls||"");$("#trMsg").textContent=t;}
+
+function trDown(e){
+  if(trPend||trClosed)return;
+  const n=e.target.dataset.hit;
+  if(!n){if(trStart){trMark(trStart,false);trStart=null;trRub.setAttribute("opacity",0);}return;}
+  if(!trStart){trStart=n;trMark(n,true);msg("Départ : "+lab(n)+" — choisis le point suivant.");return;}
+  if(n===trStart){trMark(n,false);trStart=null;trRub.setAttribute("opacity",0);msg("");return;}
+  trTry(trStart,n);
+}
+function trMove(e){
+  if(!trStart||trPend)return;
+  const r=trSvg.getBoundingClientRect(),k=VIEW.W/r.width,p=P[trStart];
+  trRub.setAttribute("x1",X(p));trRub.setAttribute("y1",Y(p));
+  trRub.setAttribute("x2",(e.clientX-r.left)*k);trRub.setAttribute("y2",(e.clientY-r.top)*k);
+  trRub.setAttribute("opacity",.7);
+}
+function trTry(a,b){
+  const leg=trC.legs.find(l=>l.f===a&&l.t===b);
+  const rev=trC.legs.find(l=>l.f===b&&l.t===a),U=used(trC);
+  const clear=()=>{trMark(a,false);trStart=null;trRub.setAttribute("opacity",0);};
+  if(trDone.find(d=>d.f===a&&d.t===b)){clear();msg("Branche déjà tracée.","warn");return;}
+  if(!leg){
+    clear();trErr++;$("#tre").textContent=trErr;
+    let m;
+    if(rev)m="✗ Branche parcourue dans le mauvais sens ("+lab(b)+" → "+lab(a)+").";
+    else if(!U.has(b))m="✗ "+lab(b)+" n'est pas utilisé sur ce circuit.";
+    else if(!U.has(a))m="✗ "+lab(a)+" n'est pas utilisé sur ce circuit.";
+    else m="✗ Cette branche n'existe pas sur ce circuit.";
+    msg(m,"bad");return;}
+  clear();
+  trPend=leg;
+  const A=P[leg.f],B=P[leg.t];
+  trPend.line=el("line",{x1:X(A),y1:Y(A),x2:X(B),y2:Y(B),
+    stroke:"#8b949e","stroke-width":2,"stroke-dasharray":"4 4"});
+  trG.appendChild(trPend.line);
+  const na=pendingAlts(leg).length;
+  msg("Renseigne le cap"+(na?" et "+(na>1?"les altitudes":"l'altitude"):"")+" sur le tracé.");
+  openFields(leg);
+}
+
+function openFields(leg){
+  clearFlds();
+  const alts=pendingAlts(leg);
+  const cp=px(capPos(trC,leg));
+  const ci=document.createElement("input");
+  ci.className="fld cap";ci.placeholder="cap";ci.inputMode="numeric";ci.maxLength=3;
+  ci.style.left=cp.x+"px";ci.style.top=cp.y+"px";
+  $("#trStage").appendChild(ci);trFlds.push(ci);
+
+  const ais=alts.map(n=>{
+    const bp=px(P[n]);
+    const f=document.createElement("input");
+    f.className="fld alt";f.placeholder="alt";f.inputMode="numeric";f.maxLength=5;
+    f.dataset.pt=n;
+    f.style.left=(bp.x+34)+"px";f.style.top=(bp.y+16)+"px";
+    $("#trStage").appendChild(f);trFlds.push(f);return f;});
+
+  const mine=[ci,...ais];
+  const submit=()=>trValidate(ci.value,ais.map(f=>({pt:f.dataset.pt,v:f.value})));
+  const ready=()=>mine.every(f=>f.value.trim()!=="");
+  mine.forEach((f,i)=>{
+    f.addEventListener("keydown",e=>{
+      if(e.key==="Enter"){e.preventDefault();
+        const nxt=mine.slice(i+1).find(g=>!g.value.trim());
+        if(nxt){nxt.focus();return;}
+        submit();}});
+    f.addEventListener("blur",()=>{setTimeout(()=>{
+      if(f.dataset.dead)return;              /* champ déjà retiré : ignorer */
+      if(!trPend||trPend!==leg)return;
+      if(mine.includes(document.activeElement))return;
+      if(ready())submit();
+      else msg("Branche en attente — complète tous les champs pour valider.","warn");},0);});
+  });
+  /* focus différé : sinon le pointerdown en cours le reprend aussitôt */
+  setTimeout(()=>{ci.focus();ci.select();},0);
+}
+
+function trValidate(capVal,altVals){
+  if(!trPend)return;
+  const leg=trPend;
+  const cv=parseInt(capVal,10);
+  if(isNaN(cv)||altVals.some(a=>isNaN(parseInt(a.v,10)))){
+    msg("Renseigne tous les champs.","warn");return;}
+
+  /* verrouille l'état AVANT tout nettoyage : évite qu'un blur en attente
+     recalcule pendingAlts avec un trAltDone périmé */
+  trPend=null;
+  altVals.forEach(a=>trAltDone.add(a.pt));
+  clearFlds();
+
+  const capOk=norm(cv)===norm(leg.c);
+  const altRes=altVals.map(a=>({pt:a.pt,ok:parseInt(a.v,10)===trC.alt[a.pt]}));
+  const bad=altRes.filter(a=>!a.ok);
+  if(!capOk)trErr++;
+  trErr+=bad.length;
+  $("#tre").textContent=trErr;
+
+  leg.line.remove();
+  trDrawLeg(leg,capOk,altRes);
+  trDone.push({f:leg.f,t:leg.t});
+  const f=[];
+  if(!capOk)f.push("cap = "+cap(leg.c));
+  bad.forEach(a=>f.push(lab(a.pt)+" = "+ft(trC.alt[a.pt])));
+  msg(f.length?("✗ "+f.join("  |  ")):"✓ branche correcte",f.length?"bad":"good");
+}
+function trDrawLeg(leg,capOk,altRes){
+  const A=P[leg.f],B=P[leg.t];
+  const err=!capOk||altRes.some(a=>!a.ok),col=err?"#f87171":"#22d3ee";
+  trG.appendChild(el("line",{x1:X(A),y1:Y(A),x2:X(B),y2:Y(B),
+    stroke:col,"stroke-width":2.2,"marker-end":"url(#"+(err?"are":"ar")+")"}));
+  const m=capPos(trC,leg);
+  const tc=el("text",{x:X(m),y:Y(m),fill:capOk?"#fbbf24":"#f87171","font-size":13,
+    "text-anchor":"middle","dominant-baseline":"middle"});
+  tc.textContent=cap(leg.c);trG.appendChild(tc);
+  altRes.forEach(a=>{
+    const p=P[a.pt];
+    const ta=el("text",{x:X(p)+10,y:Y(p)+11,fill:a.ok?"#4ade80":"#f87171","font-size":12});
+    ta.textContent=ft(trC.alt[a.pt]);trG.appendChild(ta);});
+}
+
+/* ---- validation finale ---- */
+$("#trCheck").onclick=()=>{
+  if(trClosed){trInit();return;}
+  if(trPend){msg("Termine d'abord la branche en cours.","warn");return;}
+  const miss=trC.legs.filter(l=>!trDone.find(d=>d.f===l.f&&d.t===l.t));
+  if(miss.length){
+    miss.forEach(l=>{
+      const A=P[l.f],B=P[l.t];
+      trG.appendChild(el("line",{x1:X(A),y1:Y(A),x2:X(B),y2:Y(B),
+        stroke:"#f87171","stroke-width":2,"stroke-dasharray":"6 5",opacity:.9}));
+      const m=capPos(trC,l);
+      const t=el("text",{x:X(m),y:Y(m),fill:"#f87171","font-size":13,
+        "text-anchor":"middle","dominant-baseline":"middle"});
+      t.textContent=cap(l.c);trG.appendChild(t);
+      [l.f,l.t].forEach(n=>{
+        if(trC.alt[n]===undefined||trAltDone.has(n))return;
+        trAltDone.add(n);
+        const p=P[n];
+        const ta=el("text",{x:X(p)+10,y:Y(p)+11,fill:"#f87171","font-size":12});
+        ta.textContent=ft(trC.alt[n]);trG.appendChild(ta);});
+    });
+    msg("✗ Circuit incomplet — "+miss.length+" branche(s) oubliée(s) :\n"+
+        miss.map(l=>"   "+lab(l.f)+" → "+lab(l.t)).join("\n")+
+        "\nErreurs en cours de tracé : "+trErr,"bad");
+  }else{
+    showAxes();
+    msg(trErr?("Circuit complet, mais "+trErr+" erreur(s) en cours de tracé."):
+              "✓ Circuit complet et sans erreur.",trErr?"warn":"good");
+  }
+  trClosed=true;
+  $("#trCheck").textContent="RECOMMENCER";$("#trCheck").classList.add("done");
+};
+function showAxes(){
+  axPts(trC).forEach(a=>{
+    trG.appendChild(el("line",{x1:X(a.p),y1:Y(a.p),x2:X(a.e),y2:Y(a.e),
+      stroke:"#fbbf24","stroke-width":1.4,"stroke-dasharray":"5 4",opacity:.85}));
+    const t=el("text",{x:X(a.e),y:Y(a.e)-4,fill:"#fbbf24","font-size":11,"text-anchor":"middle"});
+    t.textContent=cap(a.v);trG.appendChild(t);});
+}
+$("#trReset").onclick=trInit;
+addEventListener("resize",()=>{if(trPend)openFields(trPend);});
+trSel();trInit();
+
+/* ================== QUIZ ================== */
+let selC=DATA.map(d=>d.id),selT=TYPES.map(t=>t.id);
+let pool=[],idx=0,score=0,streak=0,best=0;
+multi($("#cSel"),CLIST,selC);multi($("#tSel"),TYPES,selT);
+function qAlt(c){const p=rnd(Object.keys(c.alt)),a=c.alt[p];
+  return{ctx:c.nom,q:"Altitude de passage à "+p+" ?",
+   opts:shuf([a,...shuf(ALTS.filter(x=>x!==a)).slice(0,3)]).map(ft),ok:ft(a),exp:p+" : "+ft(a)};}
+function qCap(c){const l=rnd(c.legs),d=new Set([l.c]);
+  while(d.size<4)d.add(norm(l.c+rnd([-40,-30,-20,-10,10,20,30,40])));
+  return{ctx:c.nom,q:"Cap de "+lab(l.f)+" vers "+lab(l.t)+" ?",opts:shuf([...d]).map(cap),
+   ok:cap(l.c),exp:lab(l.f)+" → "+lab(l.t)+" : "+cap(l.c)};}
+function qDest(c){const l=rnd(c.legs);
+  const all=[...new Set([...MASTER,...c.legs.flatMap(x=>[x.f,x.t])])].filter(x=>x!==l.t&&x!==l.f);
+  return{ctx:c.nom,q:"Depuis "+lab(l.f)+" au cap "+cap(l.c)+", on rejoint ?",
+   opts:shuf([l.t,...shuf(all).slice(0,3)]).map(lab),ok:lab(l.t),
+   exp:lab(l.f)+" → "+cap(l.c)+" → "+lab(l.t)};}
+function qAxe(c){if(!c.axes.length)return null;
+  const x=rnd(c.axes),good=x.a.map(cap).join(" / ");
+  const others=DATA.flatMap(d=>d.axes).map(o=>o.a.map(cap).join(" / ")).filter(o=>o!==good);
+  const fake=[cap(x.a[0]+20)+" / "+cap(x.a[1]-20),cap(x.a[0]-30)+" / "+cap(x.a[1]+10)];
+  return{ctx:c.nom,q:"Axes d'entrée sur "+x.p+" ?",
+   opts:shuf([good,...shuf([...new Set([...others,...fake])]).slice(0,3)]),ok:good,exp:x.p+" : "+good};}
+function buildQ(n=20){const cs=DATA.filter(d=>selC.includes(d.id)),out=[];let g=0;
+  while(out.length<n&&g++<800){const c=rnd(cs),t=rnd(selT);
+    const q=({alt:qAlt,cap:qCap,dest:qDest,axe:qAxe})[t](c);if(q)out.push(q);}return out;}
+$("#go").onclick=()=>{pool=buildQ();idx=0;score=0;streak=0;
+  $("#setup").classList.add("hide");$("#game").classList.remove("hide");
+  $("#again").classList.add("hide");$("#qt").textContent=pool.length;showQ();};
+$("#next").onclick=()=>{idx++;showQ();};
+$("#again").onclick=()=>{$("#game").classList.add("hide");$("#setup").classList.remove("hide");};
+function showQ(){
+  $("#next").classList.add("hide");$("#fb").className="fb";$("#fb").textContent="";
+  if(idx>=pool.length){$("#ctx").textContent="TERMINÉ";
+    $("#qq").textContent="Score : "+score+"/"+pool.length+"  —  meilleure série : "+best;
+    $("#op").innerHTML="";$("#again").classList.remove("hide");return;}
+  const q=pool[idx];
+  $("#qn").textContent=idx+1;$("#sc").textContent=score;$("#st").textContent=streak;
+  $("#ctx").textContent=q.ctx;$("#qq").textContent=q.q;$("#op").innerHTML="";
+  q.opts.forEach(o=>{const b=document.createElement("button");b.className="opt";b.textContent=o;
+    b.onclick=()=>ansQ(b,o,q);$("#op").appendChild(b);});}
+function ansQ(btn,val,q){
+  [...$("#op").children].forEach(b=>{b.disabled=true;if(b.textContent===q.ok)b.classList.add("good");});
+  if(val===q.ok){score++;streak++;best=Math.max(best,streak);
+    $("#fb").className="fb good";$("#fb").textContent="✓ correct";}
+  else{btn.classList.add("bad");streak=0;$("#fb").className="fb bad";$("#fb").textContent="✗ "+q.exp;}
+  $("#sc").textContent=score;$("#st").textContent=streak;$("#next").classList.remove("hide");}
+
+/* ================== CARTE ================== */
+let mapId="D16",showCap=true,showAlt=true;
+function mapSel(){chips($("#mSel"),CLIST,[mapId],v=>{mapId=v;mapSel();drawMap();},"cy");}
+function viewSel(){
+  const items=[{id:"cap",nom:"Caps"},{id:"alt",nom:"Altitudes"}],sel=[];
+  if(showCap)sel.push("cap");if(showAlt)sel.push("alt");
+  chips($("#vSel"),items,sel,v=>{if(v==="cap")showCap=!showCap;else showAlt=!showAlt;
+    viewSel();drawMap();});}
+function drawMap(){
+  const c=DATA.find(d=>d.id===mapId),U=used(c);
+  const x=p=>X(p).toFixed(1),y=p=>Y(p).toFixed(1);
+  let s='<svg viewBox="0 0 '+VIEW.W.toFixed(0)+' '+VIEW.H.toFixed(0)+
+    '" xmlns="http://www.w3.org/2000/svg" font-family="monospace">'+
+    '<defs><marker id="am2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" '+
+    'orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#22d3ee" stroke-width="1.6"/></marker></defs>';
+  s+='<line x1="'+x(R1)+'" y1="'+y(R1)+'" x2="'+x(R2)+'" y2="'+y(R2)+
+     '" stroke="#2f81f7" stroke-width="7" stroke-linecap="round"/>';
+  axPts(c).forEach(a=>{s+='<line x1="'+x(a.p)+'" y1="'+y(a.p)+'" x2="'+x(a.e)+'" y2="'+y(a.e)+
+    '" stroke="#fbbf24" stroke-width="1.4" stroke-dasharray="5 4" opacity=".85"/>';
+    if(showCap)s+='<text x="'+x(a.e)+'" y="'+(y(a.e)-4)+'" fill="#fbbf24" font-size="11" '+
+      'text-anchor="middle">'+cap(a.v)+'</text>';});
+  c.legs.forEach(l=>{const A=P[l.f],B=P[l.t];
+    s+='<line x1="'+x(A)+'" y1="'+y(A)+'" x2="'+x(B)+'" y2="'+y(B)+
+       '" stroke="#22d3ee" stroke-width="2.2" marker-end="url(#am2)"/>';
+    if(showCap){const m=capPos(c,l);
+      s+='<text x="'+x(m)+'" y="'+y(m)+'" fill="#fbbf24" font-size="13" text-anchor="middle" '+
+         'dominant-baseline="middle">'+cap(l.c)+'</text>';}});
+  ptsOf(c).forEach(n=>{
+    const p=P[n],a=c.alt[n],maj=isMajor(n),on=U.has(n);
+    s+='<circle cx="'+x(p)+'" cy="'+y(p)+'" r="'+(maj?5:3.2)+'" fill="#0d1117" stroke="'+
+       (on?(maj?"#4ade80":"#8b949e"):"#4b5563")+'" stroke-width="2"/>';
+    s+='<text x="'+(X(p)+10).toFixed(1)+'" y="'+(Y(p)-5).toFixed(1)+'" fill="'+
+       (on?(maj?"#e6edf3":"#8b949e"):"#4b5563")+'" font-size="'+(maj?13:11)+'">'+esc(lab(n))+'</text>';
+    if(a!==undefined&&showAlt)s+='<text x="'+(X(p)+10).toFixed(1)+'" y="'+(Y(p)+11).toFixed(1)+
+       '" fill="#4ade80" font-size="12">'+ft(a)+'</text>';});
+  s+='<g transform="translate('+(VIEW.W-30)+',32)"><line x1="0" y1="14" x2="0" y2="-12" '+
+     'stroke="#8b949e" stroke-width="1.4"/><polygon points="0,-17 -4,-8 4,-8" fill="#8b949e"/>'+
+     '<text x="0" y="26" fill="#8b949e" font-size="10" text-anchor="middle">N</text></g></svg>';
+  $("#svgBox").innerHTML=s;$("#mTitle").textContent=c.nom;}
+mapSel();viewSel();drawMap();
+
+/* ---- tabs ---- */
+document.querySelectorAll(".tab").forEach(t=>{
+  t.onclick=()=>{document.querySelectorAll(".tab").forEach(z=>z.classList.remove("on"));
+    t.classList.add("on");
+    ["trace","quiz","map"].forEach(k=>$("#"+k).classList.toggle("hide",t.dataset.t!==k));
+    if(t.dataset.t==="map")drawMap();};
+});
+</script>
+</body>
+</html>
