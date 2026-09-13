@@ -67,8 +67,8 @@ svg{width:100%;height:auto;display:block;touch-action:none;user-select:none}
 </head>
 <body>
 <div class="wrap">
-<h1>CIRCUITS SALON ET TBA</h1>
-<div class="sub">Départs / Retours — caps, trajectoires, altitudes</div>
+<h1>CIRCUITS SALON</h1>
+<div class="sub">Départs / Retours / Longs — caps, trajectoires, altitudes</div>
 
 <div class="tabs">
   <div class="tab on" data-t="trace">TRACÉ</div>
@@ -85,7 +85,7 @@ svg{width:100%;height:auto;display:block;touch-action:none;user-select:none}
     </div>
     <div id="trStage"><div id="trSvg"></div></div>
     <div class="fb" id="trMsg"></div>
-    <div class="leg"><i>Clique un point, puis le point suivant. Saisis le cap et les altitudes sur le tracé — validation dès que tu cliques ailleurs.</i></div>
+    <div class="leg"><i>Clique un point, puis le point suivant. Saisis le cap et les altitudes sur le tracé — validation dès que tu cliques ailleurs. Les cônes d'entrée s'affichent une fois le circuit validé.</i></div>
   </div>
   <button class="main" id="trCheck">VALIDER LE CIRCUIT</button>
 </div>
@@ -119,8 +119,11 @@ svg{width:100%;height:auto;display:block;touch-action:none;user-select:none}
     <div class="leg"><i style="color:var(--cy)">— trajectoire</i>
       <i style="color:var(--gr)">● point utilisé</i>
       <i style="color:var(--off)">● hors circuit</i>
-      <i style="color:var(--am)">-- axes d'entrée</i></div>
+      <i style="color:var(--am)">-- cônes d'entrée</i></div>
   </div>
+</div>
+
+<div class="warn">Données saisies depuis les planches manuscrites — carte de fond ajustée par relaxation sur les caps, à recouper avant vol.</div>
 </div>
 
 <script>
@@ -151,10 +154,11 @@ set("N",23,75,"CV1");     set("ME1",71,90,"LA1");
 set("W",310,55,"V216");
 set("S1",60,95,"IP34");   set("SE",70,85,"S1");
 
+/* points de virage : jamais nommés à l'écran (comme sur les planches) */
+const HIDDEN=new Set(["V116","V216","V134"]);
 const FIXED=new Set(["FIELD","IP16","IP34","TO16","TO34"]);
-const LABEL={IP16:"IP",IP34:"IP",TO16:"Décollage 16",TO34:"Décollage 34",
- V116:"pont",V216:"champs",V134:"pont"};
-const lab=n=>LABEL[n]||n;
+const LABEL={IP16:"IP",IP34:"IP",TO16:"Décollage 16",TO34:"Décollage 34"};
+const lab=n=>HIDDEN.has(n)?"le virage":(LABEL[n]||n);
 const MASTER=["LA1","CV1","N","ME1","W","S1","SE"];
 
 /* ================== CIRCUITS ================== */
@@ -175,7 +179,13 @@ const DATA=[
  axes:[{p:"N",a:[158,210]},{p:"ME1",a:[207,288]}]},
 {id:"R34",nom:"RETOUR 34",start:"IP34",extra:[],
  legs:[{f:"SE",t:"S1",c:250},{f:"S1",t:"IP34",c:240},{f:"W",t:"IP34",c:130}],
- alt:{SE:2200,S1:2200,W:1700},axes:[{p:"SE",a:[181,280]}]}
+ alt:{SE:2200,S1:2200,W:1700},axes:[{p:"SE",a:[181,280]}]},
+{id:"L16",nom:"CIRCUIT LONG 16",start:"TO16",extra:["V116","V216","IP16"],
+ legs:[{f:"TO16",t:"V116",c:260},{f:"V116",t:"V216",c:295},{f:"V216",t:"IP16",c:20}],
+ alt:{V216:1700},axes:[]},
+{id:"L34",nom:"CIRCUIT LONG 34",start:"TO34",extra:["V134","V216","IP34"],
+ legs:[{f:"TO34",t:"V134",c:275},{f:"V134",t:"V216",c:190},{f:"V216",t:"IP34",c:130}],
+ alt:{V216:1700},axes:[]}
 ];
 
 /* ====== RELAXATION ====== */
@@ -221,9 +231,14 @@ function overlap(a,b){
 (function layout(){
   DATA.forEach(c=>{
     const placed=[],res={},U=used(c);
-    ptsOf(c).forEach(n=>{const p=P[n];
+    ptsOf(c).forEach(n=>{
+      const p=P[n];
       placed.push({x:X(p),y:Y(p),w:26,h:26});
-      placed.push({x:X(p)+10+lab(n).length*3.6,y:Y(p)-5,w:lab(n).length*7.2,h:16});});
+      if(!HIDDEN.has(n)){
+        const L=lab(n).length;
+        placed.push({x:X(p)+10+L*3.6,y:Y(p)-5,w:L*7.2,h:16});
+      }
+    });
     Object.keys(c.alt).forEach(n=>{if(!U.has(n))return;const p=P[n];
       placed.push({x:X(p)+10+BOXA.w/2,y:Y(p)+11,w:BOXA.w,h:BOXA.h});});
     c.legs.forEach(l=>{
@@ -240,8 +255,19 @@ function overlap(a,b){
 })();
 const capPos=(c,l)=>LBL[c.id][legKey(l)];
 
+/* ====== PHRASAGE DES QUESTIONS DE CAP (évite de nommer les virages) ====== */
+function legDesc(l){
+  const hf=HIDDEN.has(l.f), ht=HIDDEN.has(l.t);
+  const isTO=l.f==="TO16"||l.f==="TO34";
+  if(!hf&&!ht) return "Cap de "+lab(l.f)+" vers "+lab(l.t)+" ?";
+  if(isTO&&ht) return "Quel cap au décollage ?";
+  if(hf&&ht)   return "Quel cap entre les deux virages ?";
+  if(hf&&!ht)  return "Quel cap pour rejoindre "+lab(l.t)+" après le virage ?";
+  return "Quel cap pour rejoindre le virage depuis "+lab(l.f)+" ?";
+}
+
 const TYPES=[{id:"alt",nom:"Altitudes"},{id:"cap",nom:"Caps"},
- {id:"dest",nom:"Destination"},{id:"axe",nom:"Axes d'entrée"}];
+ {id:"dest",nom:"Destination"},{id:"axe",nom:"Cônes d'entrée"}];
 const CLIST=DATA.map(d=>({id:d.id,nom:d.nom}));
 function chips(box,items,sel,cb,cls){
   box.innerHTML="";
@@ -259,10 +285,7 @@ function trSel(){chips($("#trSel"),CLIST,[trId],v=>{trId=v;trSel();trInit();},"c
 
 function px(p){const r=$("#trSvg").getBoundingClientRect(),s=r.width/VIEW.W;
   return{x:X(p)*s,y:Y(p)*s};}
-/* marque les champs comme "morts" avant de les retirer, pour que leurs
-   handlers blur en attente (setTimeout) ne fassent rien */
 function clearFlds(){trFlds.forEach(f=>{f.dataset.dead="1";f.remove();});trFlds=[];}
-/* altitudes restant à saisir sur cette branche */
 const pendingAlts=leg=>[leg.f,leg.t].filter((n,i,a)=>a.indexOf(n)===i)
   .filter(n=>trC.alt[n]!==undefined&&!trAltDone.has(n));
 
@@ -287,11 +310,13 @@ function trInit(){
   trRub=el("line",{stroke:"#22d3ee","stroke-width":2,"stroke-dasharray":"6 5",opacity:0});
   svg.appendChild(trRub);
   ptsOf(trC).forEach(n=>{
-    const p=P[n],maj=isMajor(n),x=X(p),y=Y(p);
+    const p=P[n],maj=isMajor(n),hidden=HIDDEN.has(n),x=X(p),y=Y(p);
     svg.appendChild(el("circle",{cx:x,cy:y,r:maj?5:3.5,fill:"#0d1117",
       stroke:maj?"#4ade80":"#8b949e","stroke-width":2,"data-pt":n}));
-    const t=el("text",{x:x+10,y:y-5,fill:maj?"#e6edf3":"#8b949e","font-size":maj?13:11});
-    t.textContent=lab(n);svg.appendChild(t);
+    if(!hidden){
+      const t=el("text",{x:x+10,y:y-5,fill:maj?"#e6edf3":"#8b949e","font-size":maj?13:11});
+      t.textContent=lab(n);svg.appendChild(t);
+    }
     svg.appendChild(el("circle",{cx:x,cy:y,r:17,fill:"transparent","class":"hit","data-hit":n}));});
   const rose=el("g",{transform:"translate("+(VIEW.W-30)+",32)"});
   rose.appendChild(el("line",{x1:0,y1:14,x2:0,y2:-12,stroke:"#8b949e","stroke-width":1.4}));
@@ -372,13 +397,12 @@ function openFields(leg){
         if(nxt){nxt.focus();return;}
         submit();}});
     f.addEventListener("blur",()=>{setTimeout(()=>{
-      if(f.dataset.dead)return;              /* champ déjà retiré : ignorer */
+      if(f.dataset.dead)return;
       if(!trPend||trPend!==leg)return;
       if(mine.includes(document.activeElement))return;
       if(ready())submit();
       else msg("Branche en attente — complète tous les champs pour valider.","warn");},0);});
   });
-  /* focus différé : sinon le pointerdown en cours le reprend aussitôt */
   setTimeout(()=>{ci.focus();ci.select();},0);
 }
 
@@ -389,8 +413,6 @@ function trValidate(capVal,altVals){
   if(isNaN(cv)||altVals.some(a=>isNaN(parseInt(a.v,10)))){
     msg("Renseigne tous les champs.","warn");return;}
 
-  /* verrouille l'état AVANT tout nettoyage : évite qu'un blur en attente
-     recalcule pendingAlts avec un trAltDone périmé */
   trPend=null;
   altVals.forEach(a=>trAltDone.add(a.pt));
   clearFlds();
@@ -425,7 +447,6 @@ function trDrawLeg(leg,capOk,altRes){
     ta.textContent=ft(trC.alt[a.pt]);trG.appendChild(ta);});
 }
 
-/* ---- validation finale ---- */
 $("#trCheck").onclick=()=>{
   if(trClosed){trInit();return;}
   if(trPend){msg("Termine d'abord la branche en cours.","warn");return;}
@@ -451,8 +472,9 @@ $("#trCheck").onclick=()=>{
         "\nErreurs en cours de tracé : "+trErr,"bad");
   }else{
     showAxes();
-    msg(trErr?("Circuit complet, mais "+trErr+" erreur(s) en cours de tracé."):
-              "✓ Circuit complet et sans erreur.",trErr?"warn":"good");
+    const axNote=trC.axes.length?" Cônes d'entrée affichés.":"";
+    msg((trErr?("Circuit complet, mais "+trErr+" erreur(s) en cours de tracé."):
+              "✓ Circuit complet et sans erreur.")+axNote,trErr?"warn":"good");
   }
   trClosed=true;
   $("#trCheck").textContent="RECOMMENCER";$("#trCheck").classList.add("done");
@@ -472,23 +494,32 @@ trSel();trInit();
 let selC=DATA.map(d=>d.id),selT=TYPES.map(t=>t.id);
 let pool=[],idx=0,score=0,streak=0,best=0;
 multi($("#cSel"),CLIST,selC);multi($("#tSel"),TYPES,selT);
-function qAlt(c){const p=rnd(Object.keys(c.alt)),a=c.alt[p];
-  return{ctx:c.nom,q:"Altitude de passage à "+p+" ?",
-   opts:shuf([a,...shuf(ALTS.filter(x=>x!==a)).slice(0,3)]).map(ft),ok:ft(a),exp:p+" : "+ft(a)};}
+function qAlt(c){
+  const p=rnd(Object.keys(c.alt)),a=c.alt[p],hidden=HIDDEN.has(p);
+  const disp=hidden?"le virage":p;
+  return{ctx:c.nom,q:"Altitude de passage "+(hidden?"au virage":("à "+p))+" ?",
+   opts:shuf([a,...shuf(ALTS.filter(x=>x!==a)).slice(0,3)]).map(ft),
+   ok:ft(a),exp:disp+" : "+ft(a)};
+}
 function qCap(c){const l=rnd(c.legs),d=new Set([l.c]);
   while(d.size<4)d.add(norm(l.c+rnd([-40,-30,-20,-10,10,20,30,40])));
-  return{ctx:c.nom,q:"Cap de "+lab(l.f)+" vers "+lab(l.t)+" ?",opts:shuf([...d]).map(cap),
+  return{ctx:c.nom,q:legDesc(l),opts:shuf([...d]).map(cap),
    ok:cap(l.c),exp:lab(l.f)+" → "+lab(l.t)+" : "+cap(l.c)};}
-function qDest(c){const l=rnd(c.legs);
-  const all=[...new Set([...MASTER,...c.legs.flatMap(x=>[x.f,x.t])])].filter(x=>x!==l.t&&x!==l.f);
-  return{ctx:c.nom,q:"Depuis "+lab(l.f)+" au cap "+cap(l.c)+", on rejoint ?",
+function qDest(c){
+  const cands=c.legs.filter(l=>!HIDDEN.has(l.t));
+  if(!cands.length)return null;
+  const l=rnd(cands);
+  const all=[...new Set([...MASTER,...c.legs.flatMap(x=>[x.f,x.t])])]
+    .filter(x=>x!==l.t&&x!==l.f&&!HIDDEN.has(x));
+  const from=lab(l.f);
+  return{ctx:c.nom,q:"Depuis "+from+" au cap "+cap(l.c)+", on rejoint ?",
    opts:shuf([l.t,...shuf(all).slice(0,3)]).map(lab),ok:lab(l.t),
-   exp:lab(l.f)+" → "+cap(l.c)+" → "+lab(l.t)};}
+   exp:from+" → "+cap(l.c)+" → "+lab(l.t)};}
 function qAxe(c){if(!c.axes.length)return null;
   const x=rnd(c.axes),good=x.a.map(cap).join(" / ");
   const others=DATA.flatMap(d=>d.axes).map(o=>o.a.map(cap).join(" / ")).filter(o=>o!==good);
   const fake=[cap(x.a[0]+20)+" / "+cap(x.a[1]-20),cap(x.a[0]-30)+" / "+cap(x.a[1]+10)];
-  return{ctx:c.nom,q:"Axes d'entrée sur "+x.p+" ?",
+  return{ctx:c.nom,q:"Cône d'entrée sur "+x.p+" ?",
    opts:shuf([good,...shuf([...new Set([...others,...fake])]).slice(0,3)]),ok:good,exp:x.p+" : "+good};}
 function buildQ(n=20){const cs=DATA.filter(d=>selC.includes(d.id)),out=[];let g=0;
   while(out.length<n&&g++<800){const c=rnd(cs),t=rnd(selT);
@@ -543,11 +574,12 @@ function drawMap(){
       s+='<text x="'+x(m)+'" y="'+y(m)+'" fill="#fbbf24" font-size="13" text-anchor="middle" '+
          'dominant-baseline="middle">'+cap(l.c)+'</text>';}});
   ptsOf(c).forEach(n=>{
-    const p=P[n],a=c.alt[n],maj=isMajor(n),on=U.has(n);
+    const p=P[n],a=c.alt[n],maj=isMajor(n),on=U.has(n),hidden=HIDDEN.has(n);
     s+='<circle cx="'+x(p)+'" cy="'+y(p)+'" r="'+(maj?5:3.2)+'" fill="#0d1117" stroke="'+
        (on?(maj?"#4ade80":"#8b949e"):"#4b5563")+'" stroke-width="2"/>';
-    s+='<text x="'+(X(p)+10).toFixed(1)+'" y="'+(Y(p)-5).toFixed(1)+'" fill="'+
-       (on?(maj?"#e6edf3":"#8b949e"):"#4b5563")+'" font-size="'+(maj?13:11)+'">'+esc(lab(n))+'</text>';
+    if(!hidden)
+      s+='<text x="'+(X(p)+10).toFixed(1)+'" y="'+(Y(p)-5).toFixed(1)+'" fill="'+
+         (on?(maj?"#e6edf3":"#8b949e"):"#4b5563")+'" font-size="'+(maj?13:11)+'">'+esc(lab(n))+'</text>';
     if(a!==undefined&&showAlt)s+='<text x="'+(X(p)+10).toFixed(1)+'" y="'+(Y(p)+11).toFixed(1)+
        '" fill="#4ade80" font-size="12">'+ft(a)+'</text>';});
   s+='<g transform="translate('+(VIEW.W-30)+',32)"><line x1="0" y1="14" x2="0" y2="-12" '+
